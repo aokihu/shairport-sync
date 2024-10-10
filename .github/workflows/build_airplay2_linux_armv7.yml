@@ -1,0 +1,47 @@
+name: 在Linux上编译Airplay2版本 (ARMv7)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: uraimo/run-on-arch-action@v2
+        name: 在ARMv7环境中编译
+        id: runcmd
+        with:
+          arch: armv7
+          distro: ubuntu22.04
+          setup: |
+            mkdir -p "${PWD}/artifacts"
+          dockerRunArgs: |
+            --volume "${PWD}/artifacts:/artifacts"
+          githubToken: ${{ github.token }}
+          run: |
+            apt-get update
+            apt-get -y --no-install-recommends install build-essential git xmltoman autoconf automake libtool libpopt-dev libconfig-dev libasound2-dev avahi-daemon libavahi-client-dev libssl-dev libsoxr-dev libplist-dev libsodium-dev libavutil-dev libavcodec-dev libavformat-dev uuid-dev libgcrypt-dev xxd
+            # 编译和安装NQPTP
+            git clone https://github.com/mikebrady/nqptp.git
+            cd nqptp
+            autoreconf -fi
+            ./configure
+            make
+            make install
+            cd ..
+            # 配置和编译Shairport Sync
+            autoreconf -fi
+            ./configure --with-airplay-2 --with-alsa --with-pipe --with-soxr --with-avahi --with-ssl=openssl
+            make -j
+            cp shairport-sync /artifacts
+
+      - name: 上传编译结果
+        uses: actions/upload-artifact@v4
+        with:
+          name: shairport-sync-airplay2-linux-armv7
+          path: artifacts/shairport-sync
